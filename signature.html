@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pencil Drawing Canvas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom cursor */
+        body.drawing {
+            cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><path d='M15.66 1.24a.5.5 0 0 0-.7 0L1.24 14.96a.5.5 0 1 0 .7.7L15.66 1.94a.5.5 0 0 0 0-.7z' fill='black'/><path d='M9.88 3.05L1.24 11.7l2.12 2.12 8.64-8.64z' fill='black'/><path d='M12.94 0L9.88 3.05l2.12 2.12L15.06 2.1z' fill='black'/></svg>") 0 16, auto;
+        }
+        
+        /* Custom styles for the canvas */
+        #drawingCanvas {
+            touch-action: none; /* Prevent scrolling on touch devices */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        /* Download dropdown */
+        #downloadOptions {
+            border: 1px solid #e5e7eb;
+        }
+        
+        #downloadOptions a {
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-start p-4">
+    <div class="w-full max-w-4xl">
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Pencil Drawing Canvas</h1>
+            <p class="text-gray-600">Draw anything you like with your virtual pencil</p>
+        </header>
+        
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex flex-wrap justify-center gap-4 mb-4">
+                <div class="flex items-center">
+                    <label for="colorPicker" class="mr-2 text-gray-700">Color:</label>
+                    <input type="color" id="colorPicker" value="#000000" class="w-8 h-8 cursor-pointer">
+                </div>
+                
+                <div class="flex items-center">
+                    <label for="lineWidth" class="mr-2 text-gray-700">Size:</label>
+                    <input type="range" id="lineWidth" min="1" max="20" value="3" class="w-24">
+                    <span id="widthValue" class="ml-2 text-gray-700">3px</span>
+                </div>
+
+                <button id="clearBtn" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition">
+                    Clear Canvas
+                </button>
+                
+                <div class="relative inline-block">
+                    <button id="downloadBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition">
+                        Save Drawing
+                    </button>
+                    <div id="downloadOptions" class="hidden absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10">
+                        <div class="py-1">
+                            <a href="#" class="download-option block px-4 py-2 text-gray-800 hover:bg-gray-100" data-type="png">PNG</a>
+                            <a href="#" class="download-option block px-4 py-2 text-gray-800 hover:bg-gray-100" data-type="png-transparent">PNG (Transparent)</a>
+                            <a href="#" class="download-option block px-4 py-2 text-gray-800 hover:bg-gray-100" data-type="jpg">JPG</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+                <canvas id="drawingCanvas" class="w-full bg-white cursor-crosshair" 
+                        width="800" height="500"></canvas>
+            </div>
+        </div>
+        
+        <div class="text-center text-gray-500 text-sm">
+            <p>Click and drag to draw. Change color and brush size using the controls above.</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('drawingCanvas');
+            const ctx = canvas.getContext('2d');
+            const colorPicker = document.getElementById('colorPicker');
+            const lineWidth = document.getElementById('lineWidth');
+            const widthValue = document.getElementById('widthValue');
+            const clearBtn = document.getElementById('clearBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+            
+            // Set canvas size to match display size
+            function resizeCanvas() {
+                const container = canvas.parentElement;
+                const computedStyle = getComputedStyle(container);
+                
+                canvas.width = container.clientWidth - 
+                              parseFloat(computedStyle.paddingLeft) - 
+                              parseFloat(computedStyle.paddingRight) - 
+                              parseFloat(computedStyle.borderLeftWidth) - 
+                              parseFloat(computedStyle.borderRightWidth);
+                
+                canvas.height = Math.min(canvas.width * 0.625, window.innerHeight * 0.6);
+                
+                // Redraw canvas content after resize
+                redrawCanvas();
+            }
+            
+            // Redraw canvas content (for when resizing)
+            function redrawCanvas() {
+                // In a real app, you would redraw from saved drawing data
+                // For this demo, we'll just clear it
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            // Initial setup
+            resizeCanvas();
+            ctx.strokeStyle = colorPicker.value;
+            ctx.lineWidth = lineWidth.value;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            // Drawing state
+            let isDrawing = false;
+            let lastX = 0;
+            let lastY = 0;
+            // Update brush size display
+            lineWidth.addEventListener('input', function() {
+                ctx.lineWidth = this.value;
+                widthValue.textContent = this.value + 'px';
+            });
+            
+            // Change color
+            colorPicker.addEventListener('input', function() {
+                ctx.strokeStyle = this.value;
+            });
+            
+            // Clear canvas
+            clearBtn.addEventListener('click', function() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            });
+            
+            // Download options
+            downloadBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const options = document.getElementById('downloadOptions');
+                options.classList.toggle('hidden');
+            });
+
+            document.addEventListener('click', function() {
+                document.getElementById('downloadOptions').classList.add('hidden');
+            });
+
+            document.querySelectorAll('.download-option').forEach(option => {
+                option.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const type = this.getAttribute('data-type');
+                    let mimeType, extension, quality = 1.0;
+                    
+                    switch(type) {
+                        case 'png':
+                            mimeType = 'image/png';
+                            extension = 'png';
+                            break;
+                        case 'png-transparent':
+                            mimeType = 'image/png';
+                            extension = 'png';
+                            // Create temporary canvas with transparent background
+                            const tempCanvas = document.createElement('canvas');
+                            tempCanvas.width = canvas.width;
+                            tempCanvas.height = canvas.height;
+                            const tempCtx = tempCanvas.getContext('2d');
+                            tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+                            tempCtx.drawImage(canvas, 0, 0);
+                            break;
+                        case 'jpg':
+                            mimeType = 'image/jpeg';
+                            extension = 'jpg';
+                            quality = 0.92;
+                            break;
+                    }
+
+                    // Create a blob from the canvas data
+                    let blob;
+                    if (type === 'png-transparent') {
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = canvas.width;
+                        tempCanvas.height = canvas.height;
+                        const tempCtx = tempCanvas.getContext('2d');
+                        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+                        tempCtx.drawImage(canvas, 0, 0);
+                        tempCanvas.toBlob(function(b) {
+                            blob = b;
+                            saveFile(blob, extension);
+                        }, mimeType);
+                    } else {
+                        canvas.toBlob(function(b) {
+                            blob = b;
+                            saveFile(blob, extension);
+                        }, mimeType, quality);
+                    }
+
+                    function saveFile(blob, ext) {
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `drawing-${new Date().toISOString().slice(0, 10)}.${ext}`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                        document.getElementById('downloadOptions').classList.add('hidden');
+                    }
+                });
+            });
+            
+            // Drawing functions
+            function startDrawing(e) {
+                isDrawing = true;
+                [lastX, lastY] = getPosition(e);
+                document.body.classList.add('drawing');
+            }
+            
+            function draw(e) {
+                if (!isDrawing) return;
+                
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                
+                const [x, y] = getPosition(e);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                
+                [lastX, lastY] = [x, y];
+            }
+            
+            function stopDrawing() {
+                if (!isDrawing) return;
+                isDrawing = false;
+                document.body.classList.remove('drawing');
+                
+            }
+            
+            // Get mouse/touch position
+            function getPosition(e) {
+                const rect = canvas.getBoundingClientRect();
+                let x, y;
+                
+                if (e.type.includes('touch')) {
+                    x = e.touches[0].clientX - rect.left;
+                    y = e.touches[0].clientY - rect.top;
+                } else {
+                    x = e.clientX - rect.left;
+                    y = e.clientY - rect.top;
+                }
+                
+                return [x, y];
+            }
+            
+            // Mouse events
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            
+            // Touch events for mobile
+            canvas.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                startDrawing(e);
+            });
+            
+            canvas.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+                draw(e);
+            });
+            
+            canvas.addEventListener('touchend', stopDrawing);
+            
+            // Window resize
+            window.addEventListener('resize', function() {
+                resizeCanvas();
+            });
+        });
+    </script>
+</body>
+</html>
